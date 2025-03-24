@@ -40,8 +40,7 @@ app.post("/upload", upload.single("file"), async (req: Request, res: Response) =
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
-  const fileUrl = `http://192.168.4.29:8080/uploads/${req.file.filename}`;
-
+  const fileUrl = req.file.path.replace(/^src[\\\/]/, '');
   res.status(200).json({ fileUrl });
 });
 
