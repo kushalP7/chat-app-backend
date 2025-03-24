@@ -359,6 +359,8 @@ io.on("connection", async (socket) => {
 });
 
 app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
+console.log(__dirname);
+
 
 connectDB().then(() => {
   server.listen(port, () => {
