@@ -14,6 +14,7 @@ import User from "./models/userModel";
 import upload from "./utils/multer";
 import * as mediasoup from "mediasoup";
 import { v2 as cloudinary } from "cloudinary";
+import uploadCloudnary from "./utils/cloudinary";
 
 dotenv.config();
 const app = express();
@@ -38,7 +39,7 @@ app.use(cors({
 }));
 app.use("/", router);
 
-app.post("/upload", upload.single("file"), async (req: Request, res: Response) => {
+app.post("/upload", uploadCloudnary.single("file"), async (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
