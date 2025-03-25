@@ -1,13 +1,13 @@
 import { Router } from "express";
 import verifyToken from "../middleware/authMiddleware";
-import upload from "../utils/multer";
 import UserController from "../controllers/userController";
 import MessageController from "../controllers/messageController";
 import ConversationController from "../controllers/conversationController";
+import uploadCloudnary from "../utils/cloudinary";
 
 const router = Router();
 
-router.post('/web/user/register', upload.single('image'), UserController.creatUser);
+router.post('/web/user/register', uploadCloudnary.single('image'), UserController.creatUser);
 router.post('/web/user/login', UserController.loginUser);
 router.get('/web/users', verifyToken, UserController.getAllUser);
 router.delete('/web/deleteUser/:id', verifyToken, UserController.deleteUser);
@@ -23,13 +23,10 @@ router.get('/conversations', verifyToken, ConversationController.getUserConversa
 router.post('/conversations', verifyToken, ConversationController.createOrGetConversation);
 router.get('/messages/:conversationId', verifyToken, ConversationController.getMessagesByConversationId);
 
-router.post('/conversations/group', verifyToken, upload.single('image'), ConversationController.createGroupConversation);
+router.post('/conversations/group', verifyToken, uploadCloudnary.single('image'), ConversationController.createGroupConversation);
 router.put('/conversations/group/:id/add', verifyToken, ConversationController.addMemberInGroup);
 router.get('/groupConversations', verifyToken, ConversationController.getUserGroupsConversations);
 router.get('/conversation/:id/group', verifyToken, ConversationController.getGroupInfo);
-
-
-
 
 
 export default router;

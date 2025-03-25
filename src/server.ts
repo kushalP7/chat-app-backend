@@ -1,4 +1,3 @@
-//server.ts
 import express, { Request, Response } from "express";
 import connectDB from "./config/database";
 import * as dotenv from 'dotenv';
@@ -14,8 +13,7 @@ import mongoose from "mongoose";
 import User from "./models/userModel";
 import upload from "./utils/multer";
 import * as mediasoup from "mediasoup";
-
-
+import { v2 as cloudinary } from "cloudinary";
 
 dotenv.config();
 const app = express();
@@ -33,14 +31,20 @@ const io = new Server(server, {
 
 app.use(express.json({ limit: "1000mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1000mb" }));
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use("/", router);
 
 app.post("/upload", upload.single("file"), async (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
-  const fileUrl = req.file.path.replace(/^src[\\\/]/, '');
+  const base64String = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+  const result = await cloudinary.uploader.upload(base64String,{folder: "uploads"});
+  const fileUrl = result.secure_url;
   res.status(200).json({ fileUrl });
 });
 
@@ -54,7 +58,6 @@ let peers: { [key: string]: { transports: string[], producers: string[], consume
 
 async function createMediasoupWorker() {
   worker = await mediasoup.createWorker();
-  console.log("Mediasoup Worker created", worker);
 
   routerWorker = await worker.createRouter({
     mediaCodecs: [
@@ -71,7 +74,6 @@ async function createMediasoupWorker() {
       }
     ]
   });
-  console.log("Mediasoup Router created", routerWorker.rtpCapabilities);
 }
 createMediasoupWorker();
 
@@ -188,14 +190,13 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("iceCandidate", ({ userToCall, candidate }) => {
+    if (!candidate || !candidate.candidate) {
+      console.error('Invalid ICE candidate received');
+      return;
+    }
     const socketId = userSockets.get(userToCall);
     if (socketId) io.to(socketId).emit("iceCandidate", candidate)
-    if (transports[socket.id])
-      delete transports[socket.id];
-    if (producers[socket.id])
-      delete producers[socket.id];
-    if (consumers[socket.id])
-      delete consumers[socket.id];
+
   });
 
   socket.on("disconnect", async () => {
@@ -208,6 +209,13 @@ io.on("connection", async (socket) => {
         console.log(`User ${userId} did not reconnect.`);
       }
     }, 5000);
+
+    if (transports[socket.id])
+      delete transports[socket.id];
+    if (producers[socket.id])
+      delete producers[socket.id];
+    if (consumers[socket.id])
+      delete consumers[socket.id];
   });
 
   socket.on("createTransport", async (_, callback) => {
@@ -359,7 +367,7 @@ io.on("connection", async (socket) => {
 });
 
 app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
-console.log(__dirname);
+console.log('__dirname', __dirname);
 
 
 connectDB().then(() => {

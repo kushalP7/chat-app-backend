@@ -1,13 +1,17 @@
 import { Request, Response } from "express";
 import userServices from "../services/userServices";
 import CustomRequest from "../types/customRequest";
-
+import { v2 as cloudinary } from "cloudinary";
 export default class UserController {
     static async creatUser(req: Request, res: Response): Promise<void> {
         try {
             const newUser = req.body;
-            const image = req.file;
-            newUser.avatar = image?.path.replace(/^src[\\\/]/, '');
+            if (!req.file) {
+                throw new Error("No file uploaded");
+            }
+            const base64String = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+            const result = await cloudinary.uploader.upload(base64String, { folder: "uploads" });
+            newUser.avatar = result.secure_url;
             const User = await userServices.createUser(newUser);
             res.status(200).json({ status: true, data: User, message: 'User Created Successfully' });
         } catch (error) {

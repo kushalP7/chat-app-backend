@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import Conversation from "../models/conversationModel";
 import CustomRequest from "../types/customRequest";
 import mongoose from "mongoose";
-
+import { v2 as cloudinary } from "cloudinary";
 export default class ConversationController {
     static async getUserConversations(req: Request, res: Response) {
         try {
@@ -137,8 +137,6 @@ export default class ConversationController {
                 throw new Error("Conversation ID is required");
             }
 
-            // const conversation = await Conversation.findById(conversationId).populate('messages');
-
             const conversation = await Conversation.findById(conversationId)
                 .populate({
                     path: 'messages',
@@ -186,10 +184,14 @@ export default class ConversationController {
 
     static async createGroupConversation(req: Request, res: Response): Promise<void> {
         const { members, groupName, groupDescription } = req.body;
-        const groupAvatar = req.file;
         const groupAdmin = (req as CustomRequest).userId;
 
         try {
+            if (!req.file) {
+                throw new Error("No file uploaded");
+            }
+            const base64String = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+            const result = await cloudinary.uploader.upload(base64String,{folder: "uploads"});
             const jsonMember = JSON.parse(members);
             if (!jsonMember.includes(groupAdmin)) {
                 jsonMember.push(groupAdmin);
@@ -199,7 +201,7 @@ export default class ConversationController {
                 isGroup: true,
                 groupName,
                 groupAdmin,
-                groupAvatar: groupAvatar?.path.replace(/^src[\\\/]/, ''),
+                groupAvatar: result.secure_url,
                 groupDescription,
             });
             if (!groupName || !members || members.length < 2) throw new Error('A group must have a name and at least 2 members')
