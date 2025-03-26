@@ -11,7 +11,6 @@ import Message from "./models/messageModel";
 import Conversation from "./models/conversationModel";
 import mongoose from "mongoose";
 import User from "./models/userModel";
-import upload from "./utils/multer";
 import * as mediasoup from "mediasoup";
 import { v2 as cloudinary } from "cloudinary";
 import uploadCloudnary from "./utils/cloudinary";
@@ -187,14 +186,11 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("iceCandidate", ({ userToCall, candidate }) => {
-    if (!candidate || !candidate.candidate) {
-      console.error('Invalid ICE candidate received');
-      return;
-    }
     const socketId = userSockets.get(userToCall);
-    if (socketId) io.to(socketId).emit("iceCandidate", candidate)
-
-  });
+    if (socketId) {
+        io.to(socketId).emit("iceCandidate", candidate);
+    }
+});
 
   socket.on("disconnect", async () => {
     console.log(`User disconnected: ${userId} (Socket ID: ${socket.id})`);
@@ -364,8 +360,6 @@ io.on("connection", async (socket) => {
 });
 
 app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
-console.log('__dirname', __dirname);
-
 
 connectDB().then(() => {
   server.listen(port, () => {
