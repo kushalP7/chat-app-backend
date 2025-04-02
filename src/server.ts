@@ -35,13 +35,31 @@ app.use(cors());
 app.use("/", router);
 
 app.post("/upload", uploadCloudnary.single("file"), async (req: Request, res: Response) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const mimeType = req.file.mimetype;
+    let resourceType: "image" | "video" | "auto" | "raw" = "auto";
+    if (mimeType.startsWith("video/")) {
+      resourceType = "video";
+    } else if (mimeType.startsWith("image/")) {
+      resourceType = "image";
+    } else if (mimeType.startsWith("application/pdf")) {
+      resourceType = "raw";
+    } else {
+      return res.status(400).json({ error: "Unsupported file type. Please upload a video or image." });
+    }
+    const base64String = `data:${mimeType};base64,${req.file.buffer.toString('base64')}`;
+    const result = await cloudinary.uploader.upload(base64String, {
+      folder: "uploads",
+      resource_type: resourceType,
+    });
+    const fileUrl = result.secure_url;
+    res.status(200).json({ fileUrl });
+  } catch (error) {
+    res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });
   }
-  const base64String = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-  const result = await cloudinary.uploader.upload(base64String,{folder: "uploads"});
-  const fileUrl = result.secure_url;
-  res.status(200).json({ fileUrl });
 });
 
 
@@ -172,7 +190,9 @@ io.on("connection", async (socket) => {
 
   socket.on("callUser", ({ userToCall, signalData, from, callType }) => {
     const socketId = userSockets.get(userToCall);
-    if (socketId) io.to(socketId).emit("incomingCall", { from, offer: signalData, callType });
+    if (socketId) {
+      io.to(socketId).emit("incomingCall", { from, offer: signalData, callType });
+    }
   });
 
 
@@ -188,9 +208,15 @@ io.on("connection", async (socket) => {
   socket.on("iceCandidate", ({ userToCall, candidate }) => {
     const socketId = userSockets.get(userToCall);
     if (socketId) {
-        io.to(socketId).emit("iceCandidate", candidate);
+      io.to(socketId).emit("iceCandidate", candidate);
     }
-});
+  });
+
+  socket.on('call-ended', (data) => {
+    console.log(`Call ended by ${data.from}, notifying ${data.to}`);
+
+    io.to(data.to).emit('call-ended', { from: data.from, to: data.to });
+  });
 
   socket.on("disconnect", async () => {
     console.log(`User disconnected: ${userId} (Socket ID: ${socket.id})`);
