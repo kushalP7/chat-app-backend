@@ -1,36 +1,23 @@
 import User from "../models/userModel";
-import { IUser } from "../interfaces/userInterface";
+import { IUser } from "../models/userModel";
 import bcrypt from 'bcrypt'
 import { JwtUtills } from "../utils/jwtUtiils"
 
 class UserServices {
     public async createUser(newUser: IUser): Promise<IUser> {
-
         const hashPassword = await bcrypt.hash(newUser.password, 10);
-
         newUser.password = hashPassword;
         const user = new User(newUser);
-
         return await user.save();
-
     }
 
     public async loginUser(email: string, password: string): Promise<any> {
-
         let user;
         user = await User.findOne({ email: email })
 
-        if (!user) {
-            throw new Error(`User with Email ${email} not found`);
-        }
-
+        if (!user) throw new Error(`User with Email ${email} not found`);
         const pass = await bcrypt.compare(password, user.password);
-
-        if (!pass) {
-            throw new Error(`Incorrect password`);
-        }
-        // const userId = user.id;
-        // const userName = user.username;
+        if (!pass) throw new Error(`Invalid Credentials`);
         const token = JwtUtills.generateToken(user.id);
         return { token, user };
     }
@@ -66,9 +53,6 @@ class UserServices {
     public async getAllUsersExceptCurrentUser(userId: string): Promise<any> {
         return await User.find({ _id: { $ne: userId } });
     }
-
-    
-
 
 }
 

@@ -6,9 +6,7 @@ export default class UserController {
     static async creatUser(req: Request, res: Response): Promise<void> {
         try {
             const newUser = req.body;
-            if (!req.file) {
-                throw new Error("No file uploaded");
-            }
+            if (!req.file) throw new Error("No file uploaded");
             const base64String = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
             const result = await cloudinary.uploader.upload(base64String, { folder: "uploads" });
             newUser.avatar = result.secure_url;
