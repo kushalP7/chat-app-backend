@@ -11,7 +11,6 @@ import Message from "./models/messageModel";
 import Conversation from "./models/conversationModel";
 import mongoose from "mongoose";
 import User from "./models/userModel";
-import * as mediasoup from "mediasoup";
 import { v2 as cloudinary } from "cloudinary";
 import uploadCloudnary from "./utils/cloudinary";
 
@@ -20,6 +19,9 @@ const app = express();
 const port = process.env.PORT ?? 8080;
 const server = http.createServer(app);
 const userSockets = new Map<string, string>();
+const groupCalls = new Map<string, Set<string>>();
+
+
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -61,37 +63,6 @@ app.post("/upload", uploadCloudnary.single("file"), async (req: Request, res: Re
     res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });
   }
 });
-
-
-let worker: mediasoup.types.Worker;
-let routerWorker: mediasoup.types.Router;
-let transports: any = {};
-let producers: { [key: string]: mediasoup.types.Producer } = {};
-let consumers: { [key: string]: mediasoup.types.Consumer } = {};
-let peers: { [key: string]: { transports: string[], producers: string[], consumers: string[] } } = {};
-
-async function createMediasoupWorker() {
-  worker = await mediasoup.createWorker();
-
-  routerWorker = await worker.createRouter({
-    mediaCodecs: [
-      {
-        kind: "audio",
-        mimeType: "audio/opus",
-        clockRate: 48000,
-        channels: 2
-      },
-      {
-        kind: "video",
-        mimeType: "video/VP8",
-        clockRate: 90000
-      }
-    ]
-  });
-}
-createMediasoupWorker();
-
-
 
 io.use((socket, next) => {
   const token: any = socket.handshake.query.token;
@@ -212,12 +183,6 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on('call-ended', (data) => {
-    console.log(`Call ended by ${data.from}, notifying ${data.to}`);
-
-    io.to(data.to).emit('call-ended', { from: data.from, to: data.to });
-  });
-
   socket.on("disconnect", async () => {
     console.log(`User disconnected: ${userId} (Socket ID: ${socket.id})`);
     await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
@@ -228,158 +193,70 @@ io.on("connection", async (socket) => {
         console.log(`User ${userId} did not reconnect.`);
       }
     }, 5000);
-
-    if (transports[socket.id])
-      delete transports[socket.id];
-    if (producers[socket.id])
-      delete producers[socket.id];
-    if (consumers[socket.id])
-      delete consumers[socket.id];
   });
-
-  socket.on("createTransport", async (_, callback) => {
-    try {
-      const transport = await routerWorker.createWebRtcTransport({
-        listenIps: [{ ip: "0.0.0.0", announcedIp: "192.168.4.29" }],
-        enableUdp: true,
-        enableTcp: true,
-      });
-      console.log(`Transport created for socket ${socket.id}:`, transport.id);
-      if (!peers[socket.id]) {
-        peers[socket.id] = { transports: [], producers: [], consumers: [] };
-      }
-
-      peers[socket.id].transports.push(transport.id);
-      transports[transport.id] = transport;
-
-      callback({
-        id: transport.id,
-        iceParameters: transport.iceParameters,
-        iceCandidates: transport.iceCandidates,
-        dtlsParameters: transport.dtlsParameters,
-      });
-    } catch (error) {
-      console.error("Error creating transport:", error);
-      callback({ error: "Failed to create transport" });
+  socket.on('startGroupCall', ({ groupId, userId }) => {
+    if (!groupCalls.has(groupId)) {
+      groupCalls.set(groupId, new Set());
     }
-  });
-
-  socket.on("connectTransport", async ({ transportId, dtlsParameters }, callback) => {
-    try {
-      console.log(`Connecting transport: ${transportId} for socket ${socket.id}`);
-
-      const transport = transports[transportId];
-
-      if (!transport) {
-        return callback({ error: "Transport not found" });
-      }
-
-      if (transport.connected) {
-        console.log(`Transport ${transportId} is already connected!`);
-        return callback({ success: true });
-      }
-
-      await transport.connect({ dtlsParameters });
-      transport.connected = true;
-
-      callback({ success: true });
-    } catch (error) {
-      console.error("Error connecting transport:", error);
-      callback({ error: "Failed to connect transport" });
-    }
-
-  });
-
-  socket.on("produce", async ({ kind, rtpParameters }, callback) => {
-    console.log('Received rtpParameters:', rtpParameters);
-
-    if (!rtpParameters || Object.keys(rtpParameters).length === 0) {
-      return callback({ error: "Invalid rtpParameters" });
-    }
-    try {
-      // const transport = transports[socket.id];
-      const transport: any = Object.values(transports).find((t: any) => t.appData?.socketId === socket.id);
-
-      if (transport) {
-        const producer = await transport.produce({ kind, rtpParameters });
-        producers[producer.id] = producer;
-        callback({ id: producer.id });
-      } else {
-        callback({ error: "Transport not found" });
-      }
-    } catch (error) {
-      console.error("Error producing:", error);
-      callback({ error: "Failed to produce" });
-    }
-  });
-
-  socket.on("consume", async ({ producerId, rtpCapabilities }, callback) => {
-    try {
-      if (!routerWorker.canConsume({ producerId, rtpCapabilities })) {
-        callback({ error: "Cannot consume" });
-        return;
-      }
-
-      const transport = transports[socket.id];
-      if (transport) {
-        const consumer = await transport.consume({
-          producerId,
-          rtpCapabilities,
-          paused: false,
-        });
-
-        consumers[consumer.id] = consumer;
-        callback({
-          id: consumer.id,
-          producerId: consumer.producerId,
-          kind: consumer.kind,
-          rtpParameters: consumer.rtpParameters,
-        });
-      } else {
-        callback({ error: "Transport not found" });
-      }
-    } catch (error) {
-      console.error("Error consuming:", error);
-      callback({ error: "Failed to consume" });
-    }
-  });
-
-  socket.on('joinCall', (groupId) => {
-    socket.join(groupId);
-    io.to(groupId).emit('newParticipant', {
-      userId: socket.data.userId,
-      audioProducerId: socket.data.audioProducerId,
-      videoProducerId: socket.data.videoProducerId,
+    groupCalls.get(groupId)?.add(userId);
+    
+    socket.to(groupId).emit("groupCallStarted", {
+      groupId,
+      initiator: socket.data.userId
     });
+    console.log(`Group call started for ${groupId} by ${socket.data.userId}`);
   });
-
-  socket.on('getParticipants', (groupId, callback) => {
-    const participants = Array.from(io.sockets.adapter.rooms.get(groupId) || []).map((socketId) => {
-      const participantSocket = io.sockets.sockets.get(socketId);
-      return {
-        userId: participantSocket?.data.userId,
-        audioProducerId: participantSocket?.data.audioProducerId,
-        videoProducerId: participantSocket?.data.videoProducerId,
-      };
-    });
-
-    callback({ participants });
-  });
-
-  socket.on('getRouterRtpCapabilities', (callback) => {
-    console.log('Getting router rtp capabilities', callback);
-
-    if (!routerWorker) {
-      if (callback && typeof callback === 'function') {
-        callback({ error: 'Router not initialized' });
-      }
-      return;
+  
+  socket.on('joinGroupCall', ({ groupId, userId }) => {
+    if (groupCalls.has(groupId)) {
+      groupCalls.get(groupId)?.add(userId);
+      
+      groupCalls.get(groupId)?.forEach(participantId => {
+        if (participantId !== userId) {
+          const participantSocketId = userSockets.get(participantId);
+          if (participantSocketId) {
+            io.to(participantSocketId).emit('groupCallParticipantJoined', { groupId, userId });
+          }
+        }
+      });
     }
-
-    if (callback && typeof callback === 'function') {
-      callback({ rtpCapabilities: routerWorker.rtpCapabilities });
-    } else {
-      console.error('Callback is not a function');
+  });
+  
+  socket.on('leaveGroupCall', ({ groupId, userId }) => {
+    if (groupCalls.has(groupId)) {
+      groupCalls.get(groupId)?.delete(userId);
+      
+      groupCalls.get(groupId)?.forEach(participantId => {
+        const participantSocketId = userSockets.get(participantId);
+        if (participantSocketId) {
+          io.to(participantSocketId).emit('groupCallParticipantLeft', { groupId, userId });
+        }
+      });
+      
+      if (groupCalls.get(groupId)?.size === 0) {
+        groupCalls.delete(groupId);
+      }
+    }
+  });
+  
+  socket.on('groupCallOffer', ({ groupId, toUserId, offer }) => {
+    const toSocketId = userSockets.get(toUserId);
+    if (toSocketId) {
+      io.to(toSocketId).emit('groupCallOffer', { groupId, fromUserId: socket.data.userId, offer });
+    }
+  });
+  
+  socket.on('groupCallAnswer', ({ groupId, toUserId, answer }) => {
+    const toSocketId = userSockets.get(toUserId);
+    if (toSocketId) {
+      io.to(toSocketId).emit('groupCallAnswer', { groupId, fromUserId: socket.data.userId, answer });
+    }
+  });
+  
+  socket.on('groupCallIceCandidate', ({ groupId, toUserId, candidate }) => {
+    const toSocketId = userSockets.get(toUserId);
+    if (toSocketId) {
+      io.to(toSocketId).emit('groupCallIceCandidate', { groupId, fromUserId: socket.data.userId, candidate });
     }
   });
 
