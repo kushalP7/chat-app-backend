@@ -42,12 +42,12 @@ export default class ConversationController {
     }
 
     static async createGroupConversation(req: Request, res: Response): Promise<void> {
-        const { members, groupName, groupDescription } = req.body;
+        const { groupMembers, groupName, groupDescription } = req.body;
         const groupAdmin = (req as CustomRequest).userId;
         const file = req.file;
         try {
-            if (!members || !groupAdmin) throw new Error("Members are required Or Group Admin required!");
-            const savedConversation = await ConversationService.createGroupConversation(groupAdmin, members, groupName, groupDescription, file);
+            if (!groupMembers || !groupAdmin) throw new Error("Members are required Or Group Admin required!");
+            const savedConversation = await ConversationService.createGroupConversation(groupAdmin, groupMembers, groupName, groupDescription, file);
             res.status(201).json({ status: true, data: savedConversation, message: 'Group Conversation created Successfully' });
         } catch (error) {
             res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });

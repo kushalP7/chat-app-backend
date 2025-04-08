@@ -143,19 +143,19 @@ export default class ConversationService {
         return conversation;
     }
 
-    public static async createGroupConversation(groupAdmin: string, members: string, groupName: string, groupDescription: string, file: Express.Multer.File | undefined) {
+    public static async createGroupConversation(groupAdmin: string, groupMembers: string, groupName: string, groupDescription: string, file: Express.Multer.File | undefined) {
         if (!file) {
             throw new Error("No file uploaded");
         }
         const base64String = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
         const result = await cloudinary.uploader.upload(base64String, { folder: "uploads" });
 
-        const jsonMember = JSON.parse(members);
+        const jsonMember = JSON.parse(groupMembers);
         if (!jsonMember.includes(groupAdmin)) {
             jsonMember.push(groupAdmin);
         }
 
-        if (!groupName || members.length < 2) throw new Error("A group must have a name and at least 2 members");
+            if (!groupName || groupMembers.length < 2) throw new Error("A group must have a name and at least 2 members");
 
         const newConversation = new Conversation({
             members: jsonMember,
