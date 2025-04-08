@@ -162,7 +162,7 @@ io.on("connection", async (socket) => {
   socket.on("callUser", ({ userToCall, signalData, from, callType }) => {
     const socketId = userSockets.get(userToCall);
     if (socketId) {
-      io.to(socketId).emit("incomingCall", { from, offer: signalData, callType });
+      io.to(socketId).emit("incomingCall", { from, offer: signalData, callType, to: userToCall });
     }
   });
 
