@@ -194,6 +194,7 @@ io.on("connection", async (socket) => {
       }
     }, 5000);
   });
+  
   socket.on('startGroupCall', ({ groupId, userId }) => {
     if (!groupCalls.has(groupId)) {
       groupCalls.set(groupId, new Set());
@@ -202,7 +203,8 @@ io.on("connection", async (socket) => {
     
     socket.to(groupId).emit("groupCallStarted", {
       groupId,
-      initiator: socket.data.userId
+      initiator: socket.data.userId,
+      activeGroupCall: true,
     });
     console.log(`Group call started for ${groupId} by ${socket.data.userId}`);
   });
