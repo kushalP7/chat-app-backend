@@ -3,6 +3,7 @@ import verifyToken from "../middleware/authMiddleware";
 import UserController from "../controllers/userController";
 import ConversationController from "../controllers/conversationController";
 import uploadCloudnary from "../utils/cloudinary";
+import MessageController  from "../controllers/message.controller";
 
 const router = Router();
 
@@ -22,5 +23,5 @@ router.put('/conversations/group/:id/add', verifyToken, ConversationController.a
 router.get('/groupConversations', verifyToken, ConversationController.getUserGroupsConversations);
 router.get('/conversation/:id/group', verifyToken, ConversationController.getGroupInfo);
 
-
+router.delete("/message/:id", verifyToken, MessageController.deleteMessage);
 export default router;

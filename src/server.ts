@@ -183,6 +183,12 @@ io.on("connection", async (socket) => {
     }
   });
 
+  socket.on('endCall', ({ to }) => {
+    socket.to(to).emit('callEnded');
+  });
+
+  
+
   socket.on("disconnect", async () => {
     console.log(`User disconnected: ${userId} (Socket ID: ${socket.id})`);
     await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
