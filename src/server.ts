@@ -183,7 +183,7 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on('endCall', ({ to }) => {
+  socket.on('call-ended', ({ to }) => {
     socket.to(to).emit('callEnded');
   });
 
