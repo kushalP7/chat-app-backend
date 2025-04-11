@@ -113,24 +113,78 @@ export default class ConversationService {
 
         return conversations;
     }
-
+    
     public static async getMessagesByConversationId(conversationId: string) {
         if (!conversationId) {
             throw new Error("Conversation ID is required");
         }
-        const conversation = await Conversation.findById(conversationId).populate({
-            path: "messages",
-            populate: {
-                path: "userId",
-                select: "username email avatar isOnline lastSeen",
+    
+        const conversation = await Conversation.aggregate([
+            {
+                $match: { _id: new mongoose.Types.ObjectId(conversationId) }
             },
-        });
-
-        if (!conversation) {
+            {
+                $lookup: {
+                    from: "messages",
+                    localField: "messages",
+                    foreignField: "_id",
+                    as: "messages"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$messages",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "messages.userId",
+                    foreignField: "_id",
+                    as: "messages.user"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$messages.user",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $group: {
+                    _id: "$_id",
+                    participants: { $first: "$participants" },
+                    createdAt: { $first: "$createdAt" },
+                    updatedAt: { $first: "$updatedAt" },
+                    messages: {
+                        $push: {
+                            _id: "$messages._id",
+                            content: "$messages.content",
+                            type: "$messages.type",
+                            fileUrl: "$messages.fileUrl",
+                            createdAt: "$messages.createdAt",
+                            userId: "$messages.user._id",
+                            user: {
+                                _id: "$messages.user._id",
+                                username: "$messages.user.username",
+                                email: "$messages.user.email",
+                                avatar: "$messages.user.avatar",
+                                isOnline: "$messages.user.isOnline",
+                                lastSeen: "$messages.user.lastSeen"
+                            }
+                        }
+                    }
+                }
+            }
+        ]);
+    
+        if (!conversation || conversation.length === 0) {
             throw new Error("Conversation not found");
         }
-        return conversation;
-    }
+    
+        return conversation[0];
+    } 
 
     public static async createOrGetConversation(userId: string, receiverId: string) {
 

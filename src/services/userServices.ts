@@ -2,9 +2,14 @@ import User from "../models/userModel";
 import { IUser } from "../models/userModel";
 import bcrypt from 'bcrypt'
 import { JwtUtills } from "../utils/jwtUtiils"
+import e from "express";
 
 class UserServices {
     public async createUser(newUser: IUser): Promise<IUser> {
+        const existingUser = await User.findOne({ email: newUser.email });
+        if (existingUser) {
+            throw new Error(`A user with this ${newUser.email} already exists`);
+        }
         const hashPassword = await bcrypt.hash(newUser.password, 10);
         newUser.password = hashPassword;
         const user = new User(newUser);

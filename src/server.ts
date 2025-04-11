@@ -95,10 +95,10 @@ io.on("connection", async (socket) => {
     console.log(`User ${socket.data.userId} joined conversation: ${conversationId}`);
   });
 
-  socket.on("sendMessage", async (messageData: { userId: any, conversationId: mongoose.Schema.Types.ObjectId, content: string, fileUrl?: string, type: string }) => {
+  socket.on("sendMessage", async (messageData: { user: any, conversationId: mongoose.Schema.Types.ObjectId, content: string, fileUrl?: string, type: string }) => {
 
     const newMessage = new Message({
-      userId: messageData.userId._id,
+      userId: messageData.user._id,
       content: messageData.content || messageData.type,
       fileUrl: messageData.fileUrl || "",
       type: messageData.type,
@@ -115,12 +115,12 @@ io.on("connection", async (socket) => {
 
       io.to(messageData.conversationId.toString()).emit("receiveMessage", {
         ...newMessage.toObject(),
-        userId: messageData.userId,
+        user: messageData.user,
         conversationId: messageData.conversationId,
       });
 
       conversation.members.forEach((member) => {
-        if (userSockets.has(member.toString()) && member.toString() !== messageData.userId._id.toString()) {
+        if (userSockets.has(member.toString()) && member.toString() !== messageData.user._id.toString()) {
           io.to(userSockets.get(member.toString())!).emit("receiveMessage", {
             ...newMessage.toObject(),
             conversationId: messageData.conversationId,
