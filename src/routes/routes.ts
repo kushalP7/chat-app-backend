@@ -21,7 +21,8 @@ router.get('/messages/:conversationId', verifyToken, ConversationController.getM
 router.post('/conversations/group', verifyToken, uploadCloudnary.single('image'), ConversationController.createGroupConversation);
 router.put('/conversations/group/:id/add', verifyToken, ConversationController.addMemberInGroup);
 router.get('/groupConversations', verifyToken, ConversationController.getUserGroupsConversations);
-router.get('/conversation/:id/group', verifyToken, ConversationController.getGroupInfo);
+router.get('/conversations/:id/group', verifyToken, ConversationController.getGroupInfo);
+router.delete("/conversations/:conversationId", verifyToken, ConversationController.deleteConversation);
 
-router.delete("/message/:id", verifyToken, MessageController.deleteMessage);
+router.delete("/messages/:messageId", verifyToken, MessageController.deleteMessage);
 export default router;

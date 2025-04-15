@@ -11,8 +11,8 @@ export default class MessageService{
     if (message.userId.toString() !== userId) {
         throw new Error("Unauthorized to delete this message");
     }
-
-    await Message.findByIdAndDelete(messageId);
+    message.isDeleted = true;
+    await message.save();
     return { success: true, message: "Message deleted successfully" };
  }
 }

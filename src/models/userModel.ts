@@ -1,12 +1,13 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IUser extends Document {
+    _id: mongoose.Schema.Types.ObjectId;
     username: string;
     email: string;
     password: string;
-    avatar?: string;
+    avatar: string;
     isOnline: boolean;
-    lastSeen?: Date;
+    lastSeen: Date;
 }
 
 const UserSchema = new Schema<IUser>({
@@ -28,7 +29,8 @@ const UserSchema = new Schema<IUser>({
         minlength: [6, 'Password must be at least 6 characters long']
     },
     avatar: {
-        type: String
+        type: String,
+        required: true,
     },
     isOnline: {
         type: Boolean,

@@ -6,6 +6,7 @@ export interface IMessage extends Document {
     fileUrl: string;
     type: "text" | "image" | "video" | "audio" | "pdf";
     isRead: boolean;
+    isDeleted: boolean;
     createdAt: Date;
 }
 
@@ -29,6 +30,10 @@ const MessageSchema = new Schema<IMessage>({
         required: true
     },
     isRead: {
+        type: Boolean,
+        default: false
+    },
+    isDeleted: {
         type: Boolean,
         default: false
     },

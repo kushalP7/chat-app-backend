@@ -8,7 +8,7 @@ interface IConversation extends Document {
     groupAdmin?: mongoose.Schema.Types.ObjectId;
     groupAvatar?: string;
     groupDescription?: string;
-    timestamp: Date;
+    createdAt: Date;
 }
 
 const ConversationSchema = new Schema<IConversation>({
@@ -45,7 +45,7 @@ const ConversationSchema = new Schema<IConversation>({
     groupDescription: {
         type: String,
     },
-    timestamp: {
+    createdAt: {
         type: Date,
         default: Date.now,
     },

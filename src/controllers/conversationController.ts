@@ -10,8 +10,7 @@ export default class ConversationController {
             const conversations = await ConversationService.getUserConversations(userId);
             res.status(200).json({ success: true, data: conversations });
         } catch (error) {
-            console.error("Error fetching conversations:", error);
-            res.status(500).json({ success: false, message: "Failed to get conversations." });
+            res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });
         }
     }
 
@@ -23,8 +22,7 @@ export default class ConversationController {
             const conversation = await ConversationService.getMessagesByConversationId(conversationId);
             res.status(200).json({ success: true, message: "Messages retrieved successfully", data: conversation.messages });
         } catch (error) {
-            console.error("Get messages error:", error);
-            res.status(500).json({ success: false, message: "Failed to retrieve messages. Please try again." });
+            res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });
         }
     }
 
@@ -37,7 +35,7 @@ export default class ConversationController {
             const conversation = await ConversationService.createOrGetConversation(userId, receiverId);
             res.json({ conversationId: conversation._id });
         } catch (error) {
-            res.status(500).json({ message: error.message });
+            res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });
         }
     }
 
@@ -88,7 +86,19 @@ export default class ConversationController {
             res.status(200).json({ status: true, data: conversation, message: 'Data get Successfully' });
         } catch (error) {
             res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });
+        }
+    }
 
+    static async deleteConversation(req: Request, res: Response) {
+        const { conversationId } = req.params;
+        const userId = (req as CustomRequest).userId;
+        try {
+            if (!conversationId) throw new Error("Conversation ID is required");
+            if (!userId) throw new Error("User ID is required");
+            const conversation = await ConversationService.deleteConversation(conversationId, userId);
+            res.status(200).json({ status: true, data: null, message: 'Conversation deleted successfully' });
+        } catch (error) {
+            res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });
         }
     }
 

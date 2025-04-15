@@ -2,7 +2,6 @@ import User from "../models/userModel";
 import { IUser } from "../models/userModel";
 import bcrypt from 'bcrypt'
 import { JwtUtills } from "../utils/jwtUtiils"
-import e from "express";
 
 class UserServices {
     public async createUser(newUser: IUser): Promise<IUser> {
@@ -16,7 +15,7 @@ class UserServices {
         return await user.save();
     }
 
-    public async loginUser(email: string, password: string): Promise<any> {
+    public async loginUser(email: string, password: string): Promise<{ token: string, user: IUser }> {
         let user;
         user = await User.findOne({ email: email })
 
@@ -46,16 +45,16 @@ class UserServices {
         await User.findByIdAndDelete(id);
     }
 
-    public async getUserByUserName(username: string): Promise<any> {
+    public async getUserByUserName(username: string): Promise<IUser | null> {
         const user = await User.findOne({ username: username });
         return user;
     }
 
-    public async getUserById(userId: string): Promise<any> {
+    public async getUserById(userId: string): Promise<IUser | null> {
         return await User.findById(userId);
     }
 
-    public async getAllUsersExceptCurrentUser(userId: string): Promise<any> {
+    public async getAllUsersExceptCurrentUser(userId: string): Promise<IUser[]> {
         return await User.find({ _id: { $ne: userId } });
     }
 

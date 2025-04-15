@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Conversation from "../models/conversationModel";
 import { v2 as cloudinary } from "cloudinary";
+import Message from "../models/messageModel";
 
 export default class ConversationService {
     public static async getUserConversations(userId: mongoose.Types.ObjectId) {
@@ -26,6 +27,22 @@ export default class ConversationService {
                     as: "messagesData",
                 },
             },
+            {
+                $addFields: {
+                  messagesData: {
+                    $filter: {
+                      input: "$messagesData",
+                      as: "msg",
+                      cond: {
+                        $or: [
+                          { $eq: ["$$msg.isDeleted", false] },
+                          { $not: ["$$msg.isDeleted"] }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
             {
                 $addFields: {
                     lastMessage: {
@@ -132,6 +149,35 @@ export default class ConversationService {
                 }
             },
             {
+                $set: {
+                  messages: {
+                    $filter: {
+                      input: "$messages",
+                      as: "message",
+                      cond: {
+                        $or: [
+                          {
+                            $eq: [
+                              "$$message.isDeleted",
+                              false
+                            ]
+                          },
+                          {
+                            $eq: ["$$message.isDeleted", null]
+                          },
+                          {
+                            $eq: [
+                              "$$message.isDeleted",
+                              undefined
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+            {
                 $unwind: {
                     path: "$messages",
                     preserveNullAndEmptyArrays: true
@@ -154,15 +200,14 @@ export default class ConversationService {
             {
                 $group: {
                     _id: "$_id",
-                    participants: { $first: "$participants" },
                     createdAt: { $first: "$createdAt" },
-                    updatedAt: { $first: "$updatedAt" },
                     messages: {
                         $push: {
                             _id: "$messages._id",
                             content: "$messages.content",
                             type: "$messages.type",
                             fileUrl: "$messages.fileUrl",
+                            isDeleted: "$messages.isDeleted",
                             createdAt: "$messages.createdAt",
                             userId: "$messages.user._id",
                             user: {
@@ -374,5 +419,27 @@ export default class ConversationService {
             throw new Error("Group conversation not found");
         return conversation.shift();
     }
+
+    public static async deleteConversation(conversationId: string, userId: string) {
+        const conversation = await Conversation.findById(conversationId);
+      
+        if (!conversation) {
+          throw new Error("Conversation not found");
+        }
+      
+        const isParticipant = conversation.members.some(member =>
+          member.toString() === userId
+        );
+        if (!isParticipant) {
+          throw new Error("Unauthorized: You are not a member of this conversation");
+        }
+
+        if (conversation?.messages?.length) {
+            await Message.deleteMany({ _id: { $in: conversation.messages } });
+          }
+      
+        await Conversation.findByIdAndDelete(conversationId);
+      }
+      
 
 }

@@ -10,9 +10,10 @@ import router from "./routes/routes";
 import Message from "./models/messageModel";
 import Conversation from "./models/conversationModel";
 import mongoose from "mongoose";
-import User from "./models/userModel";
+import User, { IUser } from "./models/userModel";
 import { v2 as cloudinary } from "cloudinary";
 import uploadCloudnary from "./utils/cloudinary";
+import { JwtUtills } from "./utils/jwtUtiils";
 
 dotenv.config();
 const app = express();
@@ -65,12 +66,12 @@ app.post("/upload", uploadCloudnary.single("file"), async (req: Request, res: Re
 });
 
 io.use((socket, next) => {
-  const token: any = socket.handshake.query.token;
+  const token = socket.handshake.query.token;
   if (!token) {
     return next(new Error("Authentication error"));
   }
   try {
-    const decoded = jwt.verify(token, process.env.secretKey!) as { userId: string };
+    const decoded = JwtUtills.verifyToken(token as string) as { userId: string };
     socket.data.userId = decoded.userId;
     next();
   } catch (err) {
@@ -95,7 +96,7 @@ io.on("connection", async (socket) => {
     console.log(`User ${socket.data.userId} joined conversation: ${conversationId}`);
   });
 
-  socket.on("sendMessage", async (messageData: { user: any, conversationId: mongoose.Schema.Types.ObjectId, content: string, fileUrl?: string, type: string }) => {
+  socket.on("sendMessage", async (messageData: { user: IUser, conversationId: mongoose.Schema.Types.ObjectId, content: string, fileUrl?: string, type: string }) => {
 
     const newMessage = new Message({
       userId: messageData.user._id,
@@ -109,7 +110,7 @@ io.on("connection", async (socket) => {
 
     const conversation = await Conversation.findById(messageData.conversationId);
     if (conversation) {
-      conversation.messages.push(newMessage._id as any);
+      conversation.messages.push(newMessage._id as mongoose.Schema.Types.ObjectId);
       await conversation.save();
       console.log("Message saved to conversation:", conversation._id);
 
