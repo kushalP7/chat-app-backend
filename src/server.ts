@@ -5,7 +5,6 @@ import { Server } from "socket.io";
 import http from "http";
 import path from 'path';
 import cors from 'cors';
-import jwt from "jsonwebtoken";
 import router from "./routes/routes";
 import Message from "./models/messageModel";
 import Conversation from "./models/conversationModel";
@@ -14,6 +13,7 @@ import User, { IUser } from "./models/userModel";
 import { v2 as cloudinary } from "cloudinary";
 import uploadCloudnary from "./utils/cloudinary";
 import { JwtUtills } from "./utils/jwtUtiils";
+import { logger } from "./utils/logger";
 
 dotenv.config();
 const app = express();
@@ -32,6 +32,7 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e8
 });
 
+app.use(logger);
 app.use(express.json({ limit: "1000mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1000mb" }));
 app.use(cors());
