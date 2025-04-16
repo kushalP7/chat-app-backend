@@ -26,7 +26,7 @@ export const logger = (req: Request, res: Response, next: NextFunction) => {
         else if (res.statusCode >= 400) color = COLORS.yellow;
         else if (res.statusCode >= 300) color = COLORS.cyan;
 
-        const logLine = `[${timestamp}] ${req.method} ${req.originalUrl} ${res.statusCode} - ${duration} ms - IP: ${req.ip || req.connection.remoteAddress}`;
+        const logLine = `[${timestamp}] ${req.method} ${req.originalUrl} ${res.statusCode} - ${duration} ms - IP: ${req.ip || req.connection.remoteAddress} - Host: ${req.headers.host}`;
 
         console.log(`${color}${logLine}${COLORS.reset}`);
         const logLineWithNewline = logLine + "\n";
