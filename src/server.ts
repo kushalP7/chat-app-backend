@@ -14,6 +14,7 @@ import { v2 as cloudinary } from "cloudinary";
 import uploadCloudnary from "./utils/cloudinary";
 import { JwtUtills } from "./utils/jwtUtiils";
 import { logger } from "./utils/logger";
+import * as mediasoup from "mediasoup";
 
 dotenv.config();
 const app = express();
@@ -22,6 +23,11 @@ const server = http.createServer(app);
 const userSockets = new Map<string, string>();
 const groupCalls = new Map<string, Set<string>>();
 
+let workers: mediasoup.types.Worker[] = [];
+let routers: Map<string, mediasoup.types.Router> = new Map(); 
+let transports: Map<string, Map<string, mediasoup.types.WebRtcTransport>> = new Map();
+let producers: Map<string, Map<string, mediasoup.types.Producer>> = new Map(); 
+let consumers: Map<string, Map<string, mediasoup.types.Consumer[]>> = new Map();
 
 const io = new Server(server, {
   cors: {
@@ -80,6 +86,40 @@ io.use((socket, next) => {
   }
 });
 
+
+
+
+async function createMediasoupWorkers() {
+  const numWorkers = Number(process.env.MEDIASOUP_NUM_WORKERS) || 1;
+  
+  console.log('Creating mediasoup workers...');
+
+  for (let i = 0; i < numWorkers; i++) {
+    try {
+      console.log(`Creating worker ${i+1}/${numWorkers}`);
+      
+      const worker = await mediasoup.createWorker({
+        logLevel: 'warn',
+        rtcMinPort: Number(process.env.MEDIASOUP_MIN_PORT) || 40000,
+        rtcMaxPort: Number(process.env.MEDIASOUP_MAX_PORT) || 49999,
+      });
+      
+      console.log(`Worker ${i+1} created successfully`);
+
+      worker.on('died', () => {
+        console.error('Mediasoup worker died, exiting...');
+        process.exit(1);
+      });
+      
+      workers.push(worker);
+    } catch (error) {
+      console.error('Failed to create mediasoup worker:', error);
+      throw error;
+    }
+  }
+  
+  console.log(`Created ${workers.length} mediasoup workers`);
+}
 
 io.on("connection", async (socket) => {
   const userId = socket.data.userId;
@@ -270,11 +310,172 @@ io.on("connection", async (socket) => {
     }
   });
 
+  socket.on('createOrJoinRoom', async ({ roomId }, callback) => {
+    try {
+      if (!routers.has(roomId)) {
+        if (workers.length === 0) {
+          throw new Error('No mediasoup workers available');
+        }
+        
+        const worker = workers[0];
+        const router = await worker.createRouter({
+          mediaCodecs: [
+            {
+              kind: 'audio',
+              mimeType: 'audio/opus',
+              clockRate: 48000,
+              channels: 2
+            },
+            {
+              kind: 'video',
+              mimeType: 'video/VP8',
+              clockRate: 90000,
+              parameters: { 
+                'x-google-start-bitrate': 1000
+              }
+            }
+          ]
+        });
+        routers.set(roomId, router);
+        transports.set(roomId, new Map());
+        producers.set(roomId, new Map());
+        consumers.set(roomId, new Map());
+      }
+      
+      callback({ rtpCapabilities: routers.get(roomId)?.rtpCapabilities });
+    } catch (error) {
+      console.error('Error in createOrJoinRoom:', error);
+      callback({ error: error.message });
+    }
+  });
+
+  socket.on('createWebRtcTransport', async ({ roomId }, callback) => {
+    try {
+      const router = routers.get(roomId);
+      if (!router) throw new Error('Room not found');
+      
+      const transport = await router.createWebRtcTransport({
+        listenIps: [
+          { ip: '0.0.0.0', announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP }
+        ],
+        enableUdp: true,
+        enableTcp: true,
+        preferUdp: true,
+        initialAvailableOutgoingBitrate: 1000000
+      });
+      
+      if (!transports.has(roomId)) {
+        transports.set(roomId, new Map());
+      }
+      transports.get(roomId)!.set(socket.data.userId, transport);
+      
+      callback({
+        params: {
+          id: transport.id,
+          iceParameters: transport.iceParameters,
+          iceCandidates: transport.iceCandidates,
+          dtlsParameters: transport.dtlsParameters
+        }
+      });
+    } catch (error) {
+      callback({ error: error.message });
+    }
+  });
+
+  socket.on('connectTransport', async ({ roomId, dtlsParameters }, callback) => {
+    try {
+      const transport = transports.get(roomId)?.get(socket.data.userId);
+      if (!transport) throw new Error('Transport not found');
+      
+      await transport.connect({ dtlsParameters });
+      callback({ success: true });
+    } catch (error) {
+      callback({ error: error.message });
+    }
+  });
+  
+  socket.on('produce', async ({ roomId, kind, rtpParameters }, callback) => {
+    try {
+      const transport = transports.get(roomId)?.get(socket.data.userId);
+      if (!transport) throw new Error('Transport not found');
+      
+      const producer = await transport.produce({
+        kind,
+        rtpParameters
+      });
+      
+      if (!producers.has(roomId)) {
+        producers.set(roomId, new Map());
+      }
+      producers.get(roomId)?.set(socket.data.userId, producer);
+      
+      socket.to(roomId).emit('newProducer', {
+        producerId: producer.id,
+        userId: socket.data.userId,
+        kind: producer.kind
+      });
+      
+      callback({ id: producer.id });
+    } catch (error) {
+      callback({ error: error.message });
+    }
+  });
+  
+  socket.on('consume', async ({ roomId, producerId, rtpCapabilities }, callback) => {
+    try {
+      const router = routers.get(roomId);
+      if (!router) throw new Error('Room not found');
+      
+      const producer = Array.from(producers.get(roomId)?.values() ?? [])
+        .find(p => p.id === producerId);
+      if (!producer) throw new Error('Producer not found');
+      
+      if (!router.canConsume({ producerId, rtpCapabilities })) {
+        throw new Error('Cannot consume');
+      }
+      
+      const transport = transports.get(roomId)?.get(socket.data.userId);
+      if (!transport) throw new Error('Transport not found');
+      
+      const consumer = await transport.consume({
+        producerId,
+        rtpCapabilities,
+        paused: false
+      });
+      
+      if (!consumers.has(roomId)) {
+        consumers.set(roomId, new Map());
+      }
+      if (!consumers.get(roomId)?.has(socket.data.userId)) {
+        consumers.get(roomId)?.set(socket.data.userId, []);
+      }
+      consumers.get(roomId)?.get(socket.data.userId)?.push(consumer);
+      
+      consumer.on('producerclose', () => {
+        socket.emit('producerClosed', { producerId });
+      });
+      
+      callback({
+        params: {
+          id: consumer.id,
+          producerId: consumer.producerId,
+          kind: consumer.kind,
+          rtpParameters: consumer.rtpParameters
+        }
+      });
+    } catch (error) {
+      callback({ error: error.message });
+    }
+  });
+
+  
+
 });
 
 app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
 
-connectDB().then(() => {
+connectDB().then(async () => {
+  await createMediasoupWorkers();
   server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
   });
