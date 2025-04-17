@@ -409,7 +409,7 @@ io.on("connection", async (socket) => {
       }
       producers.get(roomId)?.set(socket.data.userId, producer);
       
-      socket.to(roomId).emit('newProducer', {
+      io.to(roomId).emit('newProducer', {
         producerId: producer.id,
         userId: socket.data.userId,
         kind: producer.kind
