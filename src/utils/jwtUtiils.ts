@@ -27,7 +27,7 @@ export class JwtUtills {
         const payload = {
             aud: 'jitsi',
             iss: 'chat',
-            sub: process.env.jitsiSub,
+            sub: 'vpaas-magic-cookie-a0a921fbd4364c1d8c15b1151dfc4fe2',
             room: roomName,
             iat: now,
             nbf: now - 10,
@@ -56,7 +56,7 @@ export class JwtUtills {
             algorithm: 'RS256',
             header: {
                 alg: "RS256",
-                kid: process.env.jitsiKid,
+                kid: "vpaas-magic-cookie-a0a921fbd4364c1d8c15b1151dfc4fe2/a85696",
             }
 
         });
