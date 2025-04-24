@@ -3,7 +3,7 @@ import MessageService from "../services/message.service";
 import CustomRequest from "../types/customRequest";
 
 export default class MessageController {
-    public static async deleteMessage(req: Request, res: Response) {
+    public static async deleteMessage(req: Request, res: Response): Promise<void> {
         try {
             const { messageId } = req.params;
             const userId = (req as CustomRequest).userId;

@@ -41,8 +41,9 @@ class UserServices {
         return user;
     }
 
-    public async deleteUser(id: string): Promise<void> {
-        await User.findByIdAndDelete(id);
+    public async deleteUser(userId: string): Promise<void> {
+        if (!userId) throw new Error('User Id is required');
+        await User.findByIdAndDelete(userId);
     }
 
     public async getUserByUserName(username: string): Promise<IUser | null> {
@@ -51,6 +52,7 @@ class UserServices {
     }
 
     public async getUserById(userId: string): Promise<IUser | null> {
+        if (!userId) throw new Error('User Id is required');
         return await User.findById(userId);
     }
 

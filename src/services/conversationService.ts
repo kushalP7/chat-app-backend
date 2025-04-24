@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Conversation from "../models/conversationModel";
 import { v2 as cloudinary } from "cloudinary";
 import Message from "../models/messageModel";
+import User from "../models/userModel";
 
 export default class ConversationService {
     public static async getUserConversations(userId: mongoose.Types.ObjectId) {
@@ -29,20 +30,20 @@ export default class ConversationService {
             },
             {
                 $addFields: {
-                  messagesData: {
-                    $filter: {
-                      input: "$messagesData",
-                      as: "msg",
-                      cond: {
-                        $or: [
-                          { $eq: ["$$msg.isDeleted", false] },
-                          { $not: ["$$msg.isDeleted"] }
-                        ]
-                      }
+                    messagesData: {
+                        $filter: {
+                            input: "$messagesData",
+                            as: "msg",
+                            cond: {
+                                $or: [
+                                    { $eq: ["$$msg.isDeleted", false] },
+                                    { $not: ["$$msg.isDeleted"] }
+                                ]
+                            }
+                        }
                     }
-                  }
                 }
-              },
+            },
             {
                 $addFields: {
                     lastMessage: {
@@ -150,33 +151,33 @@ export default class ConversationService {
             },
             {
                 $set: {
-                  messages: {
-                    $filter: {
-                      input: "$messages",
-                      as: "message",
-                      cond: {
-                        $or: [
-                          {
-                            $eq: [
-                              "$$message.isDeleted",
-                              false
-                            ]
-                          },
-                          {
-                            $eq: ["$$message.isDeleted", null]
-                          },
-                          {
-                            $eq: [
-                              "$$message.isDeleted",
-                              undefined
-                            ]
-                          }
-                        ]
-                      }
+                    messages: {
+                        $filter: {
+                            input: "$messages",
+                            as: "message",
+                            cond: {
+                                $or: [
+                                    {
+                                        $eq: [
+                                            "$$message.isDeleted",
+                                            false
+                                        ]
+                                    },
+                                    {
+                                        $eq: ["$$message.isDeleted", null]
+                                    },
+                                    {
+                                        $eq: [
+                                            "$$message.isDeleted",
+                                            undefined
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
                     }
-                  }
                 }
-              },
+            },
             {
                 $unwind: {
                     path: "$messages",
@@ -254,7 +255,7 @@ export default class ConversationService {
             jsonMember.push(groupAdmin);
         }
 
-            if (!groupName || groupMembers.length < 2) throw new Error("A group must have a name and at least 2 members");
+        if (!groupName || groupMembers.length < 2) throw new Error("A group must have a name and at least 2 members");
 
         const newConversation = new Conversation({
             members: jsonMember,
@@ -269,7 +270,7 @@ export default class ConversationService {
         return savedConversation;
     }
 
-    public static async addMemberInGroup(conversationId: string, currentUserId: string, userId: mongoose.Schema.Types.ObjectId) {
+    public static async addMembersInGroup(conversationId: string, currentUserId: string, userIds: mongoose.Schema.Types.ObjectId[]) {
         const conversation = await Conversation.findById(conversationId);
 
         if (!conversation) throw new Error("Group conversation not found");
@@ -277,10 +278,14 @@ export default class ConversationService {
         if (!conversation.isGroup) throw new Error("This is not a group conversation");
 
         if (conversation?.groupAdmin?.toString() !== currentUserId) throw new Error("Only the group admin can add members");
+        const alreadyAdded = userIds.filter((userId) => conversation.members.includes(userId));
+        if (alreadyAdded.length > 0) {
+            const existingUsers = await User.find({ _id: { $in: alreadyAdded } }).select('username');
+            const existingUsernames = existingUsers.map((user) => user.username).join(', ');
+            throw new Error(`Users ${existingUsernames} are already members of this group.`);
+        }
 
-        if (conversation.members.includes(userId)) throw new Error("User is already a member of this group");
-
-        conversation.members.push(userId);
+        conversation.members.push(...userIds);
         await conversation.save();
         return conversation;
     }
@@ -424,22 +429,39 @@ export default class ConversationService {
         const conversation = await Conversation.findById(conversationId);
       
         if (!conversation) {
-          throw new Error("Conversation not found");
+            throw new Error("Conversation not found");
         }
       
         const isParticipant = conversation.members.some(member =>
-          member.toString() === userId
+            member.toString() === userId
         );
         if (!isParticipant) {
-          throw new Error("Unauthorized: You are not a member of this conversation");
+            throw new Error("Unauthorized: You are not a member of this conversation");
         }
 
         if (conversation?.messages?.length) {
             await Message.deleteMany({ _id: { $in: conversation.messages } });
-          }
-      
+        }
+
         await Conversation.findByIdAndDelete(conversationId);
-      }
-      
+    }
+
+
+    public static async removeMemberFromGroup(conversationId: string, currentUserId: string, userId: mongoose.Schema.Types.ObjectId) {
+        const conversation = await Conversation.findById(conversationId);
+
+        if (!conversation) throw new Error("Group conversation not found");
+        if (!conversation.isGroup) throw new Error("This is not a group conversation");
+        if (conversation?.groupAdmin?.toString() !== currentUserId) throw new Error("Only the group admin can remove members");
+        if (!conversation.members.includes(userId)) throw new Error("User is not a member of this group");
+        if (conversation.groupAdmin.toString() === userId.toString() && conversation.groupAdmin.toString() === currentUserId) throw new Error("You cannot remove the group admin or yourself from the group");
+
+        conversation.members = conversation.members.filter((memberId) => memberId.toString() !== userId.toString());
+
+        await conversation.save();
+        return conversation;
+    }
+
+
 
 }

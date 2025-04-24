@@ -3,7 +3,7 @@ import CustomRequest from "../types/customRequest";
 import mongoose from "mongoose";
 import ConversationService from "../services/conversationService";
 export default class ConversationController {
-    static async getUserConversations(req: Request, res: Response) {
+    static async getUserConversations(req: Request, res: Response): Promise<void> {
         const userId = new mongoose.Types.ObjectId((req as CustomRequest).userId);
         try {
             if (!userId) throw new Error("userId Is required");
@@ -53,13 +53,17 @@ export default class ConversationController {
         }
     }
 
-    static async addMemberInGroup(req: Request, res: Response): Promise<void> {
-        const { userId } = req.body;
+    static async addMembersInGroup(req: Request, res: Response): Promise<void> {
+        const { userIds } = req.body;
         const currentUserId = (req as CustomRequest).userId;
         const conversationId = req.params.id;
         try {
             if (!currentUserId) throw new Error("Current User required!");
-            const conversation = await ConversationService.addMemberInGroup(conversationId, currentUserId, userId)
+            if (!Array.isArray(userIds) || userIds.length === 0) {
+                throw new Error("userIds must be a non-empty array");
+            }
+
+            const conversation = await ConversationService.addMembersInGroup(conversationId, currentUserId, userIds)
             res.status(200).json({ status: true, data: conversation, message: 'Member Added Successfully' });
         } catch (error) {
             res.status(500).json({ status: false, data: null, message: [error.message].join(', ') });
@@ -67,7 +71,7 @@ export default class ConversationController {
         }
     }
 
-    static async getUserGroupsConversations(req: Request, res: Response) {
+    static async getUserGroupsConversations(req: Request, res: Response) : Promise<void> {
         const userId = (req as CustomRequest).userId;
         try {
             if (!userId) throw new Error("Current User required!");
@@ -89,7 +93,7 @@ export default class ConversationController {
         }
     }
 
-    static async deleteConversation(req: Request, res: Response) {
+    static async deleteConversation(req: Request, res: Response): Promise<void> {
         const { conversationId } = req.params;
         const userId = (req as CustomRequest).userId;
         try {
@@ -102,5 +106,19 @@ export default class ConversationController {
         }
     }
 
+    static async removeMemberFromGroup(req: Request, res: Response): Promise<void> {
+        const { userId } = req.body;
+        const currentUserId = (req as CustomRequest).userId;
+        const conversationId = req.params.id;
+        try {
+            if (!currentUserId) throw new Error("Current User required!");
+
+            const conversation = await ConversationService.removeMemberFromGroup(conversationId, currentUserId, userId );
+
+            res.status(200).json({ status: true, data: conversation, message: "Member removed successfully" });
+        } catch (error) {
+            res.status(500).json({ status: false, data: null, message: [error.message].join(", ") });
+        }
+    }
 
 }
