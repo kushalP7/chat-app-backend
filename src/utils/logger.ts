@@ -10,6 +10,15 @@ const COLORS = {
     red: "\x1b[31m"
 };
 
+const getISTTimestamp = (): string => {
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+
+    return istTime.toISOString().replace('T', ' ').split('.')[0];
+};
+
+
 const logsDir = path.join(__dirname, "..", "..", "logs");
 if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir);
 
@@ -19,7 +28,7 @@ export const logger = (req: Request, res: Response, next: NextFunction) => {
 
     res.on("finish", () => {
         const duration = Date.now() - start;
-        const timestamp = new Date().toISOString();
+        const timestamp = getISTTimestamp();
 
         let color = COLORS.green;
         if (res.statusCode >= 500) color = COLORS.red;

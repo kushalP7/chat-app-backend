@@ -24,5 +24,8 @@ router.get('/groupConversations', verifyToken, ConversationController.getUserGro
 router.get('/conversations/:id/group', verifyToken, ConversationController.getGroupInfo);
 router.delete("/conversations/:conversationId", verifyToken, ConversationController.deleteConversation);
 
-router.delete("/messages/:messageId", verifyToken, MessageController.deleteMessage);
+router.delete('/messages/:messageId', verifyToken, MessageController.deleteMessage);
+
+router.get('/jitsi-room/:roomName', verifyToken, JitsiCallController.generateJitsiToken);
+
 export default router;

@@ -4,7 +4,7 @@ export interface IMessage extends Document {
     userId: mongoose.Schema.Types.ObjectId;
     content: string;
     fileUrl: string;
-    type: "text" | "image" | "video" | "audio" | "pdf";
+    type: "text" | "image" | "video" | "audio" | "pdf" | "call";
     isRead: boolean;
     isDeleted: boolean;
     createdAt: Date;
@@ -25,7 +25,7 @@ const MessageSchema = new Schema<IMessage>({
     },
     type: {
         type: String,
-        enum: ["text", "image", "video", "audio", "pdf"],
+        enum: ["text", "image", "video", "audio", "pdf", "call"],
         default: "text",
         required: true
     },
